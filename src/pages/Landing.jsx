@@ -101,22 +101,21 @@ function Counter({ target, suffix = '' }) {
 }
 
 /* ── Alumni avatar card (floating) ───────────────────────── */
-function FloatingCard({ alumni, delay, x, y }) {
+function FloatingCard({ alumni, delay, index }) {
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1, y: [0, -10, 0] }}
-      transition={{ delay, duration: 0.5, y: { duration: 3 + delay, repeat: Infinity, ease: 'easeInOut' } }}
-      style={{ position: 'absolute', left: x, top: y }}
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: [0, -8, 0] }}
+      transition={{ delay, duration: 0.5, y: { duration: 3 + index * 0.5, repeat: Infinity, ease: 'easeInOut' } }}
       className="glass-bright"
-      css={{ padding: '10px 14px', zIndex: 10 }}
+      style={{ padding: '10px 14px', flexShrink: 0 }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{
-          width: 36, height: 36, borderRadius: '50%',
-          background: `linear-gradient(135deg, hsl(${parseInt(alumni.id) * 60},70%,50%), hsl(${parseInt(alumni.id) * 60 + 60},70%,60%))`,
+          width: 32, height: 32, borderRadius: '50%',
+          background: `linear-gradient(135deg, hsl(${index * 60},70%,50%), hsl(${index * 60 + 60},70%,60%))`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 14, fontWeight: 700, color: '#fff', flexShrink: 0,
+          fontSize: 13, fontWeight: 700, color: '#fff', flexShrink: 0,
         }}>
           {alumni.full_name.charAt(0)}
         </div>
@@ -198,9 +197,9 @@ export default function Landing() {
 
       {/* ── Hero ─────────────────────────────────────────── */}
       <section style={{
-        minHeight: '100vh', position: 'relative', overflow: 'hidden',
+        minHeight: '100svh', position: 'relative', overflow: 'hidden',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        padding: '80px 24px 60px',
+        padding: 'clamp(60px, 10vw, 100px) 20px 48px',
       }} className="bg-grid">
 
         <ParticleCanvas />
@@ -295,15 +294,12 @@ export default function Landing() {
         </motion.div>
 
         {/* floating alumni cards */}
-        <div style={{ position: 'relative', width: '100%', maxWidth: 700, height: 100, marginTop: 60, zIndex: 1 }}>
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center',
+          maxWidth: 680, marginTop: 44, zIndex: 1, padding: '0 16px',
+        }}>
           {mockAlumni.slice(0, 4).map((a, i) => (
-            <FloatingCard
-              key={a.id}
-              alumni={a}
-              delay={0.6 + i * 0.15}
-              x={`${5 + i * 24}%`}
-              y={i % 2 === 0 ? '0%' : '35%'}
-            />
+            <FloatingCard key={a.id} alumni={a} delay={0.6 + i * 0.15} index={i} />
           ))}
         </div>
 

@@ -137,7 +137,7 @@ export default function ProfileCard({ alumni, onClose }) {
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             style={{
               position: 'fixed', bottom: 0, left: 0, right: 0,
-              zIndex: 40, maxHeight: '85vh',
+              zIndex: 40, maxHeight: '88svh',
               background: '#0d0d18',
               borderTop: '1px solid rgba(255,255,255,0.1)',
               borderRadius: '24px 24px 0 0',
@@ -151,7 +151,7 @@ export default function ProfileCard({ alumni, onClose }) {
             </div>
 
             {/* scrollable body */}
-            <div style={{ overflowY: 'auto', flex: 1, padding: '8px 24px 40px' }}>
+            <div style={{ overflowY: 'auto', flex: 1, padding: '8px 20px', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 40px)' }}>
 
               {/* header: avatar + name + close */}
               <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 20 }}>

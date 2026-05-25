@@ -105,7 +105,7 @@ export default function ARScene({ alumni, onMarkerClick }) {
 
   /* ── Demo mode (no .mind file) ──────────────────────── */
   useEffect(() => {
-    if (!demoMode || !containerRef.current || alumni.length === 0) return
+    if (!demoMode || !containerRef.current) return
 
     const scene    = new THREE.Scene()
     const camera   = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100)
@@ -164,7 +164,7 @@ export default function ARScene({ alumni, onMarkerClick }) {
 
   /* ── MindAR mode ────────────────────────────────────── */
   useEffect(() => {
-    if (demoMode || !containerRef.current || alumni.length === 0) return
+    if (demoMode || !containerRef.current) return
     if (!window.MINDAR?.IMAGE) {
       setError('MindAR failed to load. Check your internet connection.')
       return

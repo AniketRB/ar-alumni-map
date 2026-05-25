@@ -7,6 +7,7 @@ import ScanningUI  from '@/components/ar/ScanningUI'
 import ProfileCard from '@/components/ar/ProfileCard'
 import { useARStore } from '@/lib/store/arStore'
 import { supabase } from '@/lib/supabase'
+import { mockAlumni } from '@/data/mockAlumni'
 
 /* ── Heads-up info strip ──────────────────────────────────── */
 function HUD({ alumniCount, isMapFound, demoMode }) {
@@ -51,7 +52,8 @@ export default function AR() {
     setActiveAlumni, clearActiveAlumni, setDemoMode, reset, setError,
   } = useARStore()
 
-  const [alumni, setAlumni] = useState([])
+  // start with mock data so camera opens immediately — replaced with real data if Supabase has alumni
+  const [alumni, setAlumni] = useState(mockAlumni)
 
   useEffect(() => {
     supabase
@@ -59,7 +61,7 @@ export default function AR() {
       .select('*')
       .eq('status', 'ACTIVE')
       .eq('visibility', true)
-      .then(({ data }) => { if (data) setAlumni(data) })
+      .then(({ data }) => { if (data && data.length > 0) setAlumni(data) })
   }, [])
 
   // clean up AR state when leaving
@@ -81,17 +83,15 @@ export default function AR() {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, width: '100vw', height: '100vh',
+      position: 'fixed', inset: 0, width: '100vw', height: '100dvh',
       background: '#000', overflow: 'hidden',
     }}>
 
-      {/* ── AR canvas (MindAR injects here) ──────────── */}
-      {alumni.length > 0 && (
-        <ARScene
-          alumni={alumni}
-          onMarkerClick={handleMarkerClick}
-        />
-      )}
+      {/* ── AR canvas — always mounts so camera starts immediately ── */}
+      <ARScene
+        alumni={alumni}
+        onMarkerClick={handleMarkerClick}
+      />
 
       {/* ── Scanning UI overlays ──────────────────────── */}
       <ScanningUI

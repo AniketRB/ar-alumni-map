@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Save, User, Briefcase, MapPin, GraduationCap, Link } from 'lucide-react'
 import { cityCoordinates, getCityCoordinates } from '@/data/cityCoordinates'
@@ -36,6 +36,13 @@ const inputStyle = {
 export default function AddAlumniModal({ open, onClose, onSave, editingAlumni }) {
   const [form, setForm] = useState(editingAlumni ?? EMPTY)
   const [errors, setErrors] = useState({})
+
+  useEffect(() => {
+    if (open) {
+      setForm(editingAlumni ?? EMPTY)
+      setErrors({})
+    }
+  }, [open, editingAlumni])
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
 
@@ -79,6 +86,11 @@ export default function AddAlumniModal({ open, onClose, onSave, editingAlumni })
             style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
           />
 
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 60,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none', padding: '16px',
+          }}>
           <motion.div
             key="modal"
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -86,9 +98,8 @@ export default function AddAlumniModal({ open, onClose, onSave, editingAlumni })
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: 'spring', stiffness: 350, damping: 28 }}
             style={{
-              position: 'fixed', top: '50%', left: '50%',
-              transform: 'translate(-50%, -50%)',
-              zIndex: 60, width: 'min(580px, 95vw)',
+              pointerEvents: 'auto',
+              width: 'min(580px, 95vw)',
               background: '#0d0d18', border: '1px solid rgba(255,255,255,0.1)',
               borderRadius: 20, overflow: 'hidden',
               display: 'flex', flexDirection: 'column', maxHeight: '90vh',
@@ -239,6 +250,7 @@ export default function AddAlumniModal({ open, onClose, onSave, editingAlumni })
               </button>
             </div>
           </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>

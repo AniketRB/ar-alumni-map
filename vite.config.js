@@ -5,7 +5,14 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    alias: { '@': '/src' },
+    alias: {
+      '@': '/src',
+      buffer: 'buffer/',
+      util: 'util/',
+    },
+  },
+  define: {
+    global: 'globalThis',
   },
   optimizeDeps: {
     exclude: ['mind-ar'],

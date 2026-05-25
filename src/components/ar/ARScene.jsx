@@ -175,7 +175,8 @@ export default function ARScene({ alumni, onMarkerClick }) {
       try {
         const mod = await import('mind-ar/dist/mindar-image-three.prod.js')
         MindARThree = mod.MindARThree
-      } catch {
+      } catch (importErr) {
+        console.error('[ARScene] Failed to import mind-ar:', importErr)
         setInitializing(false)
         setError('Failed to load AR engine. Please refresh and try again.')
         return
@@ -258,6 +259,7 @@ export default function ARScene({ alumni, onMarkerClick }) {
         await mindarThree.start()
         if (!destroyed) setInitializing(false)
       } catch (err) {
+        console.error('[ARScene] mindarThree.start() failed:', err)
         if (!destroyed) {
           setInitializing(false)
           if (err.message?.toLowerCase().includes('permission')) {

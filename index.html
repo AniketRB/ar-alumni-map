@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#050508" />
+    <meta name="description" content="AR Alumni Map — Point your camera at the map to discover alumni in augmented reality." />
+    <title>AR Alumni Map</title>
+
+    <!-- MindAR + Three.js via CDN (must load before app JS) -->
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js"></script>
+
+    <!-- Preload AR assets -->
+    <link rel="preload" href="/ar-assets/map.mind" as="fetch" crossorigin />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

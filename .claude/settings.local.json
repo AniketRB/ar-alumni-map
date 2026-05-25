@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create *)",
+      "Bash(cp temp-scaffold/package.json .)",
+      "Bash(cp temp-scaffold/vite.config.js .)",
+      "Bash(cp temp-scaffold/index.html .)",
+      "Bash(cp temp-scaffold/.gitignore .)",
+      "Bash(mkdir -p src public)",
+      "Bash(npm install *)",
+      "Bash(npx tailwindcss *)",
+      "Bash(node_modules/.bin/tailwindcss init *)",
+      "Bash(npm list *)"
+    ]
+  }
+}

@@ -165,115 +165,118 @@ export default function ARScene({ alumni, onMarkerClick }) {
   /* ── MindAR mode ────────────────────────────────────── */
   useEffect(() => {
     if (demoMode || !containerRef.current) return
-    if (!window.MINDAR?.IMAGE) {
-      setError('MindAR failed to load. Check your internet connection.')
-      return
-    }
 
     setInitializing(true)
-    let animFrame
+    let mindarThree
+    let destroyed = false
 
-    const { MindARThree } = window.MINDAR.IMAGE
-
-    const mindarThree = new MindARThree({
-      container:        containerRef.current,
-      imageTargetSrc:   '/ar-assets/map.mind',
-      uiLoading:        'no',
-      uiScanning:       'no',
-      uiError:          'no',
-      filterMinCF:      0.001,
-      filterBeta:       10,
-      warmupTolerance:  5,
-      missTolerance:    5,
-    })
-
-    engineRef.current = mindarThree
-    const { renderer, scene, camera } = mindarThree
-    rendererRef.current = renderer
-    sceneRef.current    = scene
-    cameraRef.current   = camera
-
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-
-    // lighting
-    scene.add(new THREE.AmbientLight(0xffffff, 0.8))
-    const dir = new THREE.DirectionalLight(0xffffff, 0.4)
-    dir.position.set(0, 5, 5)
-    scene.add(dir)
-
-    // anchor = target 0 (our map image)
-    const anchor = mindarThree.addAnchor(0)
-    anchor.onTargetFound = () => { setMapFound(true); setTrackingLost(false) }
-    anchor.onTargetLost  = () => setTrackingLost(true)
-
-    // build positions with cluster offsets
-    const positions = buildPositions(alumni)
-    markersRef.current = []
-
-    alumni.forEach((alum, i) => {
-      const { nx, ny } = positions[i]
-      const { x, y, z } = normalizedToWorld(nx, ny)
-      const color = markerColor(alum.company)
-
-      // outer pulse ring (larger, transparent)
-      const ringGeo  = new THREE.RingGeometry(0.045, 0.055, 32)
-      const ringMat  = new THREE.MeshBasicMaterial({
-        color, transparent: true, opacity: 0.35, side: THREE.DoubleSide,
-      })
-      const ring = new THREE.Mesh(ringGeo, ringMat)
-      ring.rotation.x = -Math.PI / 2
-      ring.position.set(x, y, z + 0.001)
-
-      // core sphere
-      const sphereGeo  = new THREE.SphereGeometry(0.028, 16, 16)
-      const sphereMat  = new THREE.MeshStandardMaterial({ color, roughness: 0.2, metalness: 0.6 })
-      const sphere     = new THREE.Mesh(sphereGeo, sphereMat)
-      sphere.position.set(x, y, z + 0.028)
-      sphere.userData  = { alumniId: alum.id }
-
-      anchor.group.add(ring)
-      anchor.group.add(sphere)
-      markersRef.current.push(sphere)
-    })
-
-    // render loop
-    renderer.setAnimationLoop(() => {
-      // animate ring pulsing
-      const t = Date.now() * 0.001
-      anchor.group.children.forEach((child, i) => {
-        if (child.geometry?.type === 'RingGeometry') {
-          const pulse = 0.8 + Math.sin(t * 2 + i) * 0.2
-          child.material.opacity = pulse * 0.35
-          const s = 1 + Math.sin(t * 1.5 + i) * 0.12
-          child.scale.setScalar(s)
-        }
-      })
-      renderer.render(scene, camera)
-    })
-
-    // tap events
-    const el = containerRef.current
-    el.addEventListener('click',      handleTap)
-    el.addEventListener('touchstart', handleTap, { passive: true })
-
-    mindarThree.start()
-      .then(() => setInitializing(false))
-      .catch((err) => {
+    const start = async () => {
+      let MindARThree
+      try {
+        const mod = await import('mind-ar/dist/mindar-image-three.prod.js')
+        MindARThree = mod.MindARThree
+      } catch {
         setInitializing(false)
-        if (err.message?.toLowerCase().includes('permission')) {
-          setError('Camera permission denied. Please allow camera access.')
-        } else {
-          setError(err.message || 'Failed to start AR. Try Demo Mode.')
-        }
+        setError('Failed to load AR engine. Please refresh and try again.')
+        return
+      }
+
+      if (destroyed) return
+
+      mindarThree = new MindARThree({
+        container:      containerRef.current,
+        imageTargetSrc: '/ar-assets/map.mind',
+        uiLoading:      'no',
+        uiScanning:     'no',
+        uiError:        'no',
+        filterMinCF:    0.001,
+        filterBeta:     10,
+        warmupTolerance: 5,
+        missTolerance:   5,
       })
 
-    setTracking(true)
+      engineRef.current = mindarThree
+      const { renderer, scene, camera } = mindarThree
+      rendererRef.current = renderer
+      sceneRef.current    = scene
+      cameraRef.current   = camera
+
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.8))
+      const dir = new THREE.DirectionalLight(0xffffff, 0.4)
+      dir.position.set(0, 5, 5)
+      scene.add(dir)
+
+      const anchor = mindarThree.addAnchor(0)
+      anchor.onTargetFound = () => { setMapFound(true); setTrackingLost(false) }
+      anchor.onTargetLost  = () => setTrackingLost(true)
+
+      const positions = buildPositions(alumni)
+      markersRef.current = []
+
+      alumni.forEach((alum, i) => {
+        const { nx, ny } = positions[i]
+        const { x, y, z } = normalizedToWorld(nx, ny)
+        const color = markerColor(alum.company)
+
+        const ringGeo = new THREE.RingGeometry(0.045, 0.055, 32)
+        const ringMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, side: THREE.DoubleSide })
+        const ring    = new THREE.Mesh(ringGeo, ringMat)
+        ring.rotation.x = -Math.PI / 2
+        ring.position.set(x, y, z + 0.001)
+
+        const sphereGeo = new THREE.SphereGeometry(0.028, 16, 16)
+        const sphereMat = new THREE.MeshStandardMaterial({ color, roughness: 0.2, metalness: 0.6 })
+        const sphere    = new THREE.Mesh(sphereGeo, sphereMat)
+        sphere.position.set(x, y, z + 0.028)
+        sphere.userData = { alumniId: alum.id }
+
+        anchor.group.add(ring)
+        anchor.group.add(sphere)
+        markersRef.current.push(sphere)
+      })
+
+      renderer.setAnimationLoop(() => {
+        const t = Date.now() * 0.001
+        anchor.group.children.forEach((child, i) => {
+          if (child.geometry?.type === 'RingGeometry') {
+            child.material.opacity = (0.8 + Math.sin(t * 2 + i) * 0.2) * 0.35
+            child.scale.setScalar(1 + Math.sin(t * 1.5 + i) * 0.12)
+          }
+        })
+        renderer.render(scene, camera)
+      })
+
+      const el = containerRef.current
+      el.addEventListener('click',      handleTap)
+      el.addEventListener('touchstart', handleTap, { passive: true })
+
+      setTracking(true)
+
+      try {
+        await mindarThree.start()
+        if (!destroyed) setInitializing(false)
+      } catch (err) {
+        if (!destroyed) {
+          setInitializing(false)
+          if (err.message?.toLowerCase().includes('permission')) {
+            setError('Camera permission denied. Please allow camera access in browser settings.')
+          } else {
+            setError(err.message || 'Failed to start AR. Try Demo Mode.')
+          }
+        }
+      }
+    }
+
+    start()
 
     return () => {
-      renderer.setAnimationLoop(null)
-      mindarThree.stop().catch(() => {})
-      el.removeEventListener('click',      handleTap)
-      el.removeEventListener('touchstart', handleTap)
+      destroyed = true
+      if (mindarThree) {
+        mindarThree.renderer?.setAnimationLoop(null)
+        mindarThree.stop().catch(() => {})
+      }
       engineRef.current = null
     }
   }, [demoMode, alumni, handleTap, setInitializing, setTracking, setMapFound, setTrackingLost, setError])

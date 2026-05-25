@@ -7,6 +7,9 @@ export default defineConfig({
   resolve: {
     alias: { '@': '/src' },
   },
+  optimizeDeps: {
+    exclude: ['mind-ar'],
+  },
   build: {
     chunkSizeWarningLimit: 600,
     rolldownOptions: {

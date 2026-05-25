@@ -14,11 +14,12 @@
     "@tanstack/react-query": "^5.100.14",
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.16.0",
+    "mind-ar": "^1.2.5",
     "papaparse": "^5.5.3",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.15.1",
-    "three": "^0.184.0",
+    "three": "^0.151.3",
     "zustand": "^5.0.13"
   },
   "devDependencies": {

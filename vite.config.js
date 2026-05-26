@@ -19,9 +19,8 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 600,
-    rolldownOptions: {
+    rollupOptions: {
       output: {
-        codeSplitting: true,
         manualChunks(id) {
           if (id.includes('node_modules/three'))                return 'three'
           if (id.includes('node_modules/framer-motion'))        return 'framer-motion'
@@ -29,6 +28,14 @@ export default defineConfig({
           if (id.includes('node_modules/react') || id.includes('node_modules/react-dom') || id.includes('node_modules/react-router-dom')) return 'vendor'
         },
       },
+    },
+  },
+  server: {
+    https: false,
+    headers: {
+      'Permissions-Policy': 'camera=*, microphone=()',
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
     },
   },
 })

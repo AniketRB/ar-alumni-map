@@ -58,17 +58,29 @@ function buildDemoScene(scene, alumni, onMarkerClick) {
     group.add(sphere)
   })
 
-  // camera position for demo
-  const camera = scene.getObjectByName('__demo_camera')
-  if (camera) camera.position.set(0, 0.5, 2)
-
   return group
+}
+
+/* ── Request camera permission explicitly before MindAR ─── */
+async function requestCameraPermission() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false,
+    })
+    // Stop all tracks — MindAR will open its own stream
+    stream.getTracks().forEach((t) => t.stop())
+    return true
+  } catch (err) {
+    console.warn('[ARScene] Camera permission error:', err.name, err.message)
+    return false
+  }
 }
 
 /* ── Main AR Scene Component ─────────────────────────────── */
 export default function ARScene({ alumni, onMarkerClick }) {
   const containerRef = useRef(null)
-  const engineRef    = useRef(null)   // MindARThree instance
+  const engineRef    = useRef(null)
   const sceneRef     = useRef(null)
   const cameraRef    = useRef(null)
   const rendererRef  = useRef(null)
@@ -81,7 +93,7 @@ export default function ARScene({ alumni, onMarkerClick }) {
   /* ── raycasting on tap ──────────────────────────────── */
   const handleTap = useCallback((e) => {
     const bounds = containerRef.current?.getBoundingClientRect()
-    if (!bounds || !rendererRef.current) return
+    if (!bounds || !cameraRef.current) return
 
     const clientX = e.touches ? e.touches[0].clientX : e.clientX
     const clientY = e.touches ? e.touches[0].clientY : e.clientY
@@ -94,7 +106,6 @@ export default function ARScene({ alumni, onMarkerClick }) {
 
     if (hits.length > 0) {
       let obj = hits[0].object
-      // walk up to find userData.alumniId
       while (obj && !obj.userData.alumniId) obj = obj.parent
       if (obj?.userData.alumniId) {
         const found = alumni.find((a) => a.id === obj.userData.alumniId)
@@ -103,13 +114,12 @@ export default function ARScene({ alumni, onMarkerClick }) {
     }
   }, [alumni, onMarkerClick])
 
-  /* ── Demo mode (no .mind file) ──────────────────────── */
+  /* ── Demo mode ──────────────────────────────────────── */
   useEffect(() => {
     if (!demoMode || !containerRef.current) return
 
     const scene    = new THREE.Scene()
     const camera   = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100)
-    camera.name    = '__demo_camera'
     camera.position.set(0, 0.8, 1.8)
     scene.add(camera)
 
@@ -123,15 +133,12 @@ export default function ARScene({ alumni, onMarkerClick }) {
     rendererRef.current = renderer
     sceneRef.current    = scene
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8)
-    scene.add(ambientLight)
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8))
 
-    // build markers
     const demoGroup = buildDemoScene(scene, alumni, onMarkerClick)
     markersRef.current = []
     demoGroup.traverse((c) => { if (c.isMesh && c.userData.alumniId) markersRef.current.push(c) })
 
-    // slow rotation for demo
     let frame
     const animate = () => {
       frame = requestAnimationFrame(animate)
@@ -171,27 +178,47 @@ export default function ARScene({ alumni, onMarkerClick }) {
     let destroyed = false
 
     const start = async () => {
+      // ── Step 1: explicit camera permission check ──
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setInitializing(false)
+        setError('Camera not available. Make sure you\'re on HTTPS and using a supported browser.')
+        return
+      }
+
+      const permissionGranted = await requestCameraPermission()
+      if (!permissionGranted) {
+        setInitializing(false)
+        setError('permission denied')
+        return
+      }
+
+      if (destroyed) return
+
+      // ── Step 2: load MindAR from CDN (reliable in production) ──
       let MindARThree
       try {
-        const mod = await import('mind-ar/dist/mindar-image-three.prod.js')
+        const mod = await import(
+          /* @vite-ignore */
+          'https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js'
+        )
         MindARThree = mod.MindARThree
       } catch (importErr) {
         console.error('[ARScene] Failed to import mind-ar:', importErr)
         setInitializing(false)
-        setError('Failed to load AR engine. Please refresh and try again.')
+        setError('MindAR failed to load. Check your internet connection.')
         return
       }
 
       if (destroyed) return
 
       mindarThree = new MindARThree({
-        container:      containerRef.current,
-        imageTargetSrc: '/ar-assets/map.mind',
-        uiLoading:      'no',
-        uiScanning:     'no',
-        uiError:        'no',
-        filterMinCF:    0.001,
-        filterBeta:     10,
+        container:       containerRef.current,
+        imageTargetSrc:  '/ar-assets/map.mind',
+        uiLoading:       'no',
+        uiScanning:      'no',
+        uiError:         'no',
+        filterMinCF:     0.001,
+        filterBeta:      10,
         warmupTolerance: 5,
         missTolerance:   5,
       })
@@ -262,8 +289,12 @@ export default function ARScene({ alumni, onMarkerClick }) {
         console.error('[ARScene] mindarThree.start() failed:', err)
         if (!destroyed) {
           setInitializing(false)
-          if (err.message?.toLowerCase().includes('permission')) {
-            setError('Camera permission denied. Please allow camera access in browser settings.')
+          if (err.name === 'NotAllowedError' || err.message?.toLowerCase().includes('permission')) {
+            setError('permission denied')
+          } else if (err.name === 'NotFoundError') {
+            setError('No camera found on this device.')
+          } else if (err.name === 'NotReadableError') {
+            setError('Camera is already in use by another app. Close it and retry.')
           } else {
             setError(err.message || 'Failed to start AR. Try Demo Mode.')
           }

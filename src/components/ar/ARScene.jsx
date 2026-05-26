@@ -198,8 +198,8 @@ export default function ARScene({ alumni, onMarkerClick }) {
       let MindARThree
       try {
         const mod = await import(
-          /* @vite-ignore */
-          'https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js'
+          
+          'mind-ar/dist/mindar-image-three.prod.js'
         )
         MindARThree = mod.MindARThree
       } catch (importErr) {

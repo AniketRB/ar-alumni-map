@@ -3,7 +3,8 @@ import { motion } from 'framer-motion'
 import { ComposableMap, Geographies, Geography, Marker, Graticule } from 'react-simple-maps'
 import { Users, MapPin, Globe } from 'lucide-react'
 
-const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
+// Served locally — no CDN dependency
+const GEO_URL = '/ar-assets/world-110m.json'
 
 const BRAND = {
   Google: '#4285f4', Microsoft: '#00a4ef', Meta: '#0866ff',
@@ -55,11 +56,12 @@ export default function WorldMap({ alumni, onCityClick }) {
   }), [alumni, cityGroups])
 
   return (
+    /* Outer wrapper: portal clip-path reveal */
     <motion.div
       key="world-map"
-      initial={{ clipPath: 'circle(0% at 50% 50%)', opacity: 1 }}
-      animate={{ clipPath: 'circle(150% at 50% 50%)', opacity: 1 }}
-      exit={{ clipPath: 'circle(0% at 50% 50%)', opacity: 0 }}
+      initial={{ clipPath: 'circle(0% at 50% 50%)' }}
+      animate={{ clipPath: 'circle(150% at 50% 50%)' }}
+      exit={{ opacity: 0 }}
       transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
       style={{
         position: 'fixed', inset: 0, zIndex: 10,
@@ -72,11 +74,11 @@ export default function WorldMap({ alumni, onCityClick }) {
         style={{ position: 'absolute', inset: 0, opacity: 0.35, pointerEvents: 'none' }}
       />
 
-      {/* stats bar */}
+      {/* stats bar — fades in after the portal opens */}
       <motion.div
         initial={{ opacity: 0, y: -14 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.55 }}
+        transition={{ delay: 0.9 }}
         style={{
           position: 'absolute',
           top: 'max(68px, calc(env(safe-area-inset-top) + 60px))',
@@ -100,7 +102,7 @@ export default function WorldMap({ alumni, onCityClick }) {
         </div>
       </motion.div>
 
-      {/* world map SVG */}
+      {/* world map */}
       <ComposableMap
         projection="geoMercator"
         projectionConfig={{ scale: 130, center: [15, 25] }}
@@ -131,7 +133,6 @@ export default function WorldMap({ alumni, onCityClick }) {
 
         {cityGroups.map((cg, i) => {
           if (!cg.nx || !cg.ny) return null
-          // skip the "Other" placeholder placed at (0.5, 0.5) → Gulf of Guinea
           if (Math.abs(cg.nx - 0.5) < 0.0001 && Math.abs(cg.ny - 0.5) < 0.0001) return null
 
           const [lon, lat] = nxnyToLonLat(cg.nx, cg.ny)
@@ -141,39 +142,32 @@ export default function WorldMap({ alumni, onCityClick }) {
 
           return (
             <Marker key={cg.key} coordinates={[lon, lat]}>
+              {/* Use opacity-only animation on SVG g — scale on SVG needs explicit
+                  transformOrigin and behaves differently across browsers */}
               <motion.g
-                initial={{ opacity: 0, scale: 0 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.75 + i * 0.07, type: 'spring', stiffness: 480, damping: 22 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.9 + i * 0.06, duration: 0.4 }}
                 onClick={() => onCityClick({ city: cg.city, country: cg.country, alumni: cg.list })}
                 style={{ cursor: 'pointer' }}
               >
-                {/* outer glow rings */}
                 <circle r={r * 3.0} fill={color} fillOpacity={0.04} />
                 <circle r={r * 1.8} fill={color} fillOpacity={0.13} />
-                {/* main dot */}
                 <circle
                   r={r} fill={color} fillOpacity={0.92}
                   stroke="rgba(255,255,255,0.3)" strokeWidth={0.8}
                 />
-                {/* city name */}
                 <text
-                  y={-r - 5}
-                  fontSize={7.5}
-                  fill="#94a3b8"
+                  y={-r - 5} fontSize={7.5} fill="#94a3b8"
                   textAnchor="middle"
                   style={{ pointerEvents: 'none', userSelect: 'none', fontFamily: 'system-ui, sans-serif' }}
                 >
                   {cg.city}
                 </text>
-                {/* count badge */}
                 {count > 1 && (
                   <text
-                    y={r * 0.38}
-                    fontSize={r * 0.78}
-                    fill="#fff"
-                    textAnchor="middle"
-                    fontWeight="800"
+                    y={r * 0.38} fontSize={r * 0.78} fill="#fff"
+                    textAnchor="middle" fontWeight="800"
                     style={{ pointerEvents: 'none', userSelect: 'none', fontFamily: 'system-ui, sans-serif' }}
                   >
                     {count}
@@ -189,7 +183,7 @@ export default function WorldMap({ alumni, onCityClick }) {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 1.4 }}
+        transition={{ delay: 1.6 }}
         style={{
           position: 'absolute',
           bottom: 'max(28px, calc(env(safe-area-inset-bottom) + 20px))',

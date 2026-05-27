@@ -11,8 +11,21 @@ function LinkedinIcon({ size = 16, color = '#0a66c2' }) {
   )
 }
 
-/* ── Avatar with initials ─────────────────────────────────── */
-function Avatar({ name, company, size = 72 }) {
+/* ── Avatar with photo or initials ───────────────────────── */
+function Avatar({ name, size = 72, avatarUrl }) {
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={name}
+        style={{
+          width: size, height: size, borderRadius: size * 0.3,
+          objectFit: 'cover', flexShrink: 0,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+        }}
+      />
+    )
+  }
   const hue = name.charCodeAt(0) * 7 % 360
   return (
     <div style={{
@@ -155,7 +168,7 @@ export default function ProfileCard({ alumni, onClose }) {
 
               {/* header: avatar + name + close */}
               <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 20 }}>
-                <Avatar name={alumni.full_name} company={alumni.company} />
+                <Avatar name={alumni.full_name} avatarUrl={alumni.avatar_url} />
 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#f1f5f9', lineHeight: 1.2 }}>

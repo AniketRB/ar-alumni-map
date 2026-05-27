@@ -5,6 +5,7 @@ import { ArrowLeft, Users, RotateCcw, MapPin, Globe, ZoomIn } from 'lucide-react
 import ARScene     from '@/components/ar/ARScene'
 import ScanningUI  from '@/components/ar/ScanningUI'
 import ProfileCard from '@/components/ar/ProfileCard'
+import CityRoster  from '@/components/ar/CityRoster'
 import { useARStore } from '@/lib/store/arStore'
 import { supabase } from '@/lib/supabase'
 import { mockAlumni } from '@/data/mockAlumni'
@@ -193,7 +194,8 @@ export default function AR() {
     reset, setError, setFocusedCity,
   } = useARStore()
 
-  const [alumni, setAlumni] = useState(() => withFreshCoords(mockAlumni))
+  const [alumni, setAlumni]         = useState(() => withFreshCoords(mockAlumni))
+  const [rosterCity, setRosterCity] = useState(null)
 
   useEffect(() => {
     supabase
@@ -227,7 +229,15 @@ export default function AR() {
 
   const cities = useMemo(() => getCities(alumni), [alumni])
 
-  const handleMarkerClick = useCallback((a) => setActiveAlumni(a), [setActiveAlumni])
+  const handleZoneClick = useCallback((cityAlumni) => {
+    if (!cityAlumni?.length) return
+    setRosterCity({ city: cityAlumni[0].city, country: cityAlumni[0].country, alumni: cityAlumni })
+  }, [])
+
+  const handleRosterAlumni = useCallback((a) => {
+    setRosterCity(null)
+    setActiveAlumni(a)
+  }, [setActiveAlumni])
   const handleRetry       = useCallback(() => { reset(); window.location.reload() }, [reset])
   const handleDemo        = useCallback(() => { setError(null); setDemoMode(true) }, [setDemoMode, setError])
   const handleSelectCity  = useCallback((city) => setFocusedCity(city), [setFocusedCity])
@@ -241,7 +251,7 @@ export default function AR() {
     <div className="ar-root">
 
       {/* AR canvas */}
-      <ARScene alumni={alumni} onMarkerClick={handleMarkerClick} />
+      <ARScene alumni={alumni} onZoneClick={handleZoneClick} />
 
       {/* Scanning overlays */}
       <ScanningUI
@@ -390,6 +400,12 @@ export default function AR() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <CityRoster
+        rosterCity={rosterCity}
+        onAlumniClick={handleRosterAlumni}
+        onClose={() => setRosterCity(null)}
+      />
 
       <ProfileCard alumni={activeAlumni} onClose={clearActiveAlumni} />
     </div>

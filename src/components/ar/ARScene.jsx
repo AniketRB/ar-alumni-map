@@ -1,101 +1,71 @@
 import { useEffect, useRef, useCallback } from 'react'
 import * as THREE from 'three'
 import { useARStore } from '@/lib/store/arStore'
-import { normalizedToWorld, clusterOffset } from '@/lib/ar/coordinateMapper'
+import { normalizedToWorld } from '@/lib/ar/coordinateMapper'
 import { getCityCoordinates } from '@/data/cityCoordinates'
 
 /* ── Brand colours ───────────────────────────────────────── */
 const BRAND = {
-  Google:          { color: 0x4285f4 }, Microsoft:  { color: 0x00a4ef },
-  Meta:            { color: 0x0866ff }, Apple:      { color: 0x888888 },
-  Amazon:          { color: 0xff9900 }, Netflix:    { color: 0xe50914 },
-  DeepMind:        { color: 0x6366f1 }, Stripe:     { color: 0x635bff },
-  Uber:            { color: 0x06b6d4 }, 'Goldman Sachs': { color: 0x22c55e },
-  'Agnikul Cosmos':{ color: 0xf97316 },
-  default:         { color: 0x8b5cf6 },
+  Google:          0x4285f4, Microsoft:       0x00a4ef,
+  Meta:            0x0866ff, Apple:           0x888888,
+  Amazon:          0xff9900, Netflix:         0xe50914,
+  DeepMind:        0x6366f1, Stripe:          0x635bff,
+  Uber:            0x06b6d4, 'Goldman Sachs': 0x22c55e,
+  'Agnikul Cosmos':0xf97316, default:         0x8b5cf6,
 }
-function getBrand(c = '') { return BRAND[c] ?? BRAND.default }
+function brandColor(company = '') { return BRAND[company] ?? BRAND.default }
 
-/* ── Get REAL viewport size (not CSS 100vh which includes browser chrome) ── */
+function dominantColor(alumniList) {
+  const counts = {}
+  alumniList.forEach(a => { counts[a.company] = (counts[a.company] || 0) + 1 })
+  const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? ''
+  return brandColor(top)
+}
+
+/* ── Real viewport (avoids Android address-bar trap) ─────── */
 function getViewport() {
-  // window.visualViewport is the gold standard on mobile
-  // falls back to window.innerWidth/innerHeight (also correct on most browsers)
-  if (window.visualViewport) {
-    return {
-      w: window.visualViewport.width,
-      h: window.visualViewport.height,
-    }
-  }
+  if (window.visualViewport) return { w: window.visualViewport.width, h: window.visualViewport.height }
   return { w: window.innerWidth, h: window.innerHeight }
 }
-
-/* ── Apply correct size to the container div ─────────────── */
 function sizeContainer(el) {
   if (!el) return
   const { w, h } = getViewport()
-  el.style.width  = w + 'px'
-  el.style.height = h + 'px'
-  el.style.position = 'fixed'
-  el.style.top  = '0'
-  el.style.left = '0'
-  el.style.overflow = 'hidden'
+  Object.assign(el.style, { width: w + 'px', height: h + 'px', position: 'fixed', top: '0', left: '0', overflow: 'hidden' })
 }
 
-/* ── Build positions with cluster offset ─────────────────── */
-function buildPositions(alumni) {
-  const cityMap = {}
+/* ── Group alumni by city ───────────────────────────────── */
+function buildCityGroups(alumni) {
+  const map = {}
   alumni.forEach((a) => {
     const key = `${a.city}__${a.country}`
-    if (!cityMap[key]) cityMap[key] = []
-    cityMap[key].push(a)
+    if (!map[key]) map[key] = { key, city: a.city, country: a.country, nx: a.nx, ny: a.ny, list: [] }
+    map[key].list.push(a)
   })
-  return alumni.map((a) => {
-    const key   = `${a.city}__${a.country}`
-    const group = cityMap[key]
-    const idx   = group.indexOf(a)
-    const { dx, dy } = clusterOffset(idx, group.length)
-    return { nx: a.nx + dx, ny: a.ny + dy, clusterSize: group.length }
-  })
+  return Object.values(map)
 }
 
-/* ── 3-D pin marker ──────────────────────────────────────── */
-function createPin(color, scale = 1.0) {
+/* ── City zone (flat glowing disc on the map surface) ───── */
+function createCityZone(color, count) {
   const g = new THREE.Group()
-  const s = scale
-  const needleH = 0.022 * s
-  const needle  = new THREE.Mesh(
-    new THREE.ConeGeometry(0.004 * s, needleH, 8),
-    new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.7 })
-  )
-  needle.rotation.z = Math.PI
-  needle.position.y = needleH * 0.5
-  g.add(needle)
+  const r = 0.026 + 0.007 * Math.min(Math.log2(count + 1), 3.5)
 
-  const ballR = 0.013 * s
-  const ball  = new THREE.Mesh(
-    new THREE.SphereGeometry(ballR, 16, 16),
-    new THREE.MeshStandardMaterial({ color, roughness: 0.15, metalness: 0.8, emissive: color, emissiveIntensity: 0.35 })
-  )
-  ball.position.y = needleH + ballR
-  g.add(ball)
+  const mat = (opacity) => new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity, side: THREE.DoubleSide,
+  })
 
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.016 * s, 0.022 * s, 32),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
-  )
-  ring.rotation.x = -Math.PI / 2
-  ring.position.y = 0.001
-  g.add(ring)
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(r * 0.50, 32), mat(0.65))
+  disc.rotation.x = -Math.PI / 2
+  g.add(disc)
 
-  const foot = new THREE.Mesh(
-    new THREE.CircleGeometry(0.008 * s, 24),
-    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.25, side: THREE.DoubleSide })
-  )
-  foot.rotation.x = -Math.PI / 2
-  foot.position.y = 0.0005
-  g.add(foot)
+  const rim = new THREE.Mesh(new THREE.RingGeometry(r * 0.55, r, 48), mat(0.50))
+  rim.rotation.x = -Math.PI / 2
+  g.add(rim)
 
-  g.userData = { ring, ball, baseY: needleH + ballR, color }
+  const pulse = new THREE.Mesh(new THREE.RingGeometry(r * 1.06, r * 1.34, 48), mat(0.18))
+  pulse.rotation.x = -Math.PI / 2
+  g.add(pulse)
+
+  g.userData = { disc, rim, pulse }
   return g
 }
 
@@ -104,36 +74,37 @@ function lerp(a, b, t) { return a + (b - a) * t }
 /* ── Camera permission ───────────────────────────────────── */
 async function requestCamera() {
   try {
-    const s = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' } }, audio: false,
-    })
+    const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
     s.getTracks().forEach(t => t.stop())
     return true
   } catch (e) { console.warn('[AR] camera:', e.name); return false }
 }
 
-/* ── Demo grid ───────────────────────────────────────────── */
+/* ── Demo grid (zones in a grid) ─────────────────────────── */
 function buildDemoScene(scene, alumni) {
-  const root = new THREE.Group()
+  const root  = new THREE.Group()
   scene.add(root)
-  alumni.forEach((alum, i) => {
-    const col = i % 4, row = Math.floor(i / 4)
-    const pin = createPin(getBrand(alum.company).color, 1)
-    pin.position.set((col - 1.5) * 0.38, (1 - row) * 0.30, 0)
-    pin.rotation.x = -Math.PI / 2
-    pin.userData.alumniId = alum.id
-    root.add(pin)
+  const groups = buildCityGroups(alumni)
+  groups.forEach((cg, i) => {
+    const col   = i % 4
+    const row   = Math.floor(i / 4)
+    const color = dominantColor(cg.list)
+    const zone  = createCityZone(color, cg.list.length)
+    zone.position.set((col - 1.5) * 0.38, (1.5 - row) * 0.32, 0)
+    zone.userData.cityKey    = cg.key
+    zone.userData.cityAlumni = cg.list
+    root.add(zone)
   })
   return root
 }
 
 /* ── Main Component ──────────────────────────────────────── */
-export default function ARScene({ alumni, onMarkerClick }) {
+export default function ARScene({ alumni, onZoneClick }) {
   const containerRef = useRef(null)
   const engineRef    = useRef(null)
   const cameraRef    = useRef(null)
-  const markersRef   = useRef([])
-  const pinsRef      = useRef([])
+  const markersRef   = useRef([])   // meshes for raycasting
+  const zonesRef     = useRef([])   // zone groups for animation
   const raycaster    = useRef(new THREE.Raycaster())
   const pointer      = useRef(new THREE.Vector2())
   const zoomTarget   = useRef({ sx: 1, sy: 1, px: 0, py: 0 })
@@ -157,7 +128,7 @@ export default function ARScene({ alumni, onMarkerClick }) {
     }
   }, [focusedCity, cityZoomMode])
 
-  /* ── Tap handler ─────────────────────────────────────────── */
+  /* ── Tap → find zone ─────────────────────────────────────── */
   const handleTap = useCallback((e) => {
     const bounds = containerRef.current?.getBoundingClientRect()
     if (!bounds || !cameraRef.current) return
@@ -169,12 +140,9 @@ export default function ARScene({ alumni, onMarkerClick }) {
     const hits = raycaster.current.intersectObjects(markersRef.current, true)
     if (!hits.length) return
     let obj = hits[0].object
-    while (obj && !obj.userData.alumniId) obj = obj.parent
-    if (obj?.userData.alumniId) {
-      const found = alumni.find(a => a.id === obj.userData.alumniId)
-      if (found) onMarkerClick(found)
-    }
-  }, [alumni, onMarkerClick])
+    while (obj && !obj.userData.cityKey) obj = obj.parent
+    if (obj?.userData.cityKey) onZoneClick(obj.userData.cityAlumni)
+  }, [onZoneClick])
 
   /* ── Demo mode ───────────────────────────────────────────── */
   useEffect(() => {
@@ -196,12 +164,13 @@ export default function ARScene({ alumni, onMarkerClick }) {
 
     scene.add(new THREE.AmbientLight(0xffffff, 1.2))
     const root = buildDemoScene(scene, alumni)
+
     markersRef.current = []
-    pinsRef.current    = []
+    zonesRef.current   = []
     root.traverse(c => {
-      if (c.isGroup && c.userData.alumniId) {
-        markersRef.current.push(...c.children.filter(ch => ch.isMesh))
-        pinsRef.current.push(c)
+      if (c.isGroup && c.userData.cityKey) {
+        zonesRef.current.push(c)
+        c.children.forEach(ch => { if (ch.isMesh) markersRef.current.push(ch) })
       }
     })
     setMapFound(true)
@@ -210,17 +179,21 @@ export default function ARScene({ alumni, onMarkerClick }) {
     const animate = () => {
       frame = requestAnimationFrame(animate)
       t += 0.016
-      root.rotation.y += 0.003
-      pinsRef.current.forEach((pin, i) => {
-        const { ring, ball, baseY } = pin.userData
-        if (ring) ring.material.opacity = 0.3 + 0.25 * Math.sin(t * 2 + i * 0.8)
-        if (ball) ball.position.y = baseY + 0.003 * Math.sin(t * 3 + i * 1.2)
+      root.rotation.y += 0.002
+      zonesRef.current.forEach((zone, i) => {
+        const { disc, rim, pulse } = zone.userData
+        if (disc)  disc.material.opacity  = 0.50 + 0.18 * Math.sin(t * 1.8 + i * 0.9)
+        if (rim)   rim.material.opacity   = 0.35 + 0.18 * Math.sin(t * 1.8 + i * 0.9 + 0.4)
+        if (pulse) {
+          pulse.material.opacity = Math.max(0, 0.12 + 0.12 * Math.sin(t * 2.2 + i * 0.7))
+          pulse.scale.setScalar(1 + 0.18 * ((Math.sin(t * 2.2 + i * 0.7) + 1) / 2))
+        }
       })
       renderer.render(scene, camera)
     }
     animate()
 
-    el.addEventListener('click', handleTap)
+    el.addEventListener('click',      handleTap)
     el.addEventListener('touchstart', handleTap, { passive: true })
 
     const onResize = () => {
@@ -237,7 +210,7 @@ export default function ARScene({ alumni, onMarkerClick }) {
       cancelAnimationFrame(frame)
       renderer.dispose()
       renderer.domElement.remove()
-      el.removeEventListener('click', handleTap)
+      el.removeEventListener('click',      handleTap)
       el.removeEventListener('touchstart', handleTap)
       window.visualViewport?.removeEventListener('resize', onResize)
       window.removeEventListener('resize', onResize)
@@ -266,17 +239,15 @@ export default function ARScene({ alumni, onMarkerClick }) {
         const mod = await import('mind-ar/dist/mindar-image-three.prod.js')
         MindARThree = mod.MindARThree
       } catch (err) {
+        console.error('[ARScene] Failed to import mind-ar:', err)
         setInitializing(false)
-        setError('MindAR failed to load. Check your internet connection.')
+        setError('Failed to load AR engine. Please refresh and try again.')
         return
       }
       if (destroyed) return
 
-      // ── CRITICAL: size container to REAL viewport BEFORE MindAR reads it ──
       const el = containerRef.current
       sizeContainer(el)
-
-      // Small yield so browser has applied the sizes before MindAR reads clientWidth/clientHeight
       await new Promise(r => setTimeout(r, 50))
       if (destroyed) return
 
@@ -300,50 +271,48 @@ export default function ARScene({ alumni, onMarkerClick }) {
       anchor.onTargetFound = () => { setMapFound(true); setTrackingLost(false) }
       anchor.onTargetLost  = () => setTrackingLost(true)
 
-      const positions = buildPositions(alumni)
+      const cityGroups = buildCityGroups(alumni)
       markersRef.current = []
-      pinsRef.current    = []
+      zonesRef.current   = []
 
-      alumni.forEach((alum, i) => {
-        const { nx, ny, clusterSize } = positions[i]
-        const { x, y } = normalizedToWorld(nx, ny)
-        const s = clusterSize > 5 ? 0.65 : clusterSize > 2 ? 0.8 : 1.0
-        const pin = createPin(getBrand(alum.company).color, s)
-        pin.position.set(x, y, 0.001)
-        pin.userData.alumniId = alum.id
-        anchor.group.add(pin)
-        pinsRef.current.push(pin)
-        pin.traverse(c => { if (c.isMesh) markersRef.current.push(c) })
+      cityGroups.forEach((cg) => {
+        const color = dominantColor(cg.list)
+        const { x, y } = normalizedToWorld(cg.nx, cg.ny)
+        const zone  = createCityZone(color, cg.list.length)
+        zone.position.set(x, y, 0.001)
+        zone.userData.cityKey    = cg.key
+        zone.userData.cityAlumni = cg.list
+        anchor.group.add(zone)
+        zonesRef.current.push(zone)
+        zone.children.forEach(ch => { if (ch.isMesh) markersRef.current.push(ch) })
       })
 
       let t = 0
       renderer.setAnimationLoop(() => {
         t += 0.016
 
-        // Pulse pins
-        pinsRef.current.forEach((pin, i) => {
-          const { ring, ball, baseY } = pin.userData
-          if (ring) {
-            ring.material.opacity = 0.35 + 0.25 * Math.sin(t * 2 + i * 0.7)
-            ring.scale.setScalar(1 + 0.15 * Math.sin(t * 1.5 + i * 0.5))
+        zonesRef.current.forEach((zone, i) => {
+          const { disc, rim, pulse } = zone.userData
+          if (disc)  disc.material.opacity  = 0.50 + 0.18 * Math.sin(t * 1.8 + i * 0.9)
+          if (rim)   rim.material.opacity   = 0.35 + 0.18 * Math.sin(t * 1.8 + i * 0.9 + 0.4)
+          if (pulse) {
+            pulse.material.opacity = Math.max(0, 0.12 + 0.12 * Math.sin(t * 2.2 + i * 0.7))
+            pulse.scale.setScalar(1 + 0.18 * ((Math.sin(t * 2.2 + i * 0.7) + 1) / 2))
           }
-          if (ball) ball.position.y = baseY + 0.003 * Math.sin(t * 3 + i * 1.1)
         })
 
         // Smooth zoom
-        const c = zoomCurrent.current, tg = zoomTarget.current, sp = 0.06
-        c.sx = lerp(c.sx, tg.sx, sp); c.sy = lerp(c.sy, tg.sy, sp)
-        c.px = lerp(c.px, tg.px, sp); c.py = lerp(c.py, tg.py, sp)
+        const c = zoomCurrent.current, tg = zoomTarget.current
+        c.sx = lerp(c.sx, tg.sx, 0.06); c.sy = lerp(c.sy, tg.sy, 0.06)
+        c.px = lerp(c.px, tg.px, 0.06); c.py = lerp(c.py, tg.py, 0.06)
         anchor.group.scale.set(c.sx, c.sy, 1)
         anchor.group.position.set(c.px, c.py, 0)
 
         renderer.render(scene, camera)
       })
 
-      // ── Resize handler: re-size container so MindAR video stays correct ──
       const onResize = () => {
         sizeContainer(el)
-        // MindAR doesn't expose a resize API, so we update the renderer
         const { w, h } = getViewport()
         renderer.setSize(w, h)
       }
@@ -358,6 +327,7 @@ export default function ARScene({ alumni, onMarkerClick }) {
         await mindarThree.start()
         if (!destroyed) setInitializing(false)
       } catch (err) {
+        console.error('[ARScene] mindarThree.start() failed:', err)
         if (!destroyed) {
           setInitializing(false)
           if      (err.name === 'NotAllowedError')  setError('permission denied')
@@ -384,15 +354,9 @@ export default function ARScene({ alumni, onMarkerClick }) {
       ref={containerRef}
       id="mindar-ar-container"
       style={{
-        position: 'fixed',
-        top: 0, left: 0,
-        // Use JS-set px values (via sizeContainer) — not 100vh which is wrong on mobile
-        // Default to 100% here; sizeContainer() overrides with exact pixel values
-        width: '100%',
-        height: '100%',
-        zIndex: 0,
-        overflow: 'hidden',
-        background: '#000',
+        position: 'fixed', top: 0, left: 0,
+        width: '100%', height: '100%',
+        zIndex: 0, overflow: 'hidden', background: '#000',
       }}
     />
   )

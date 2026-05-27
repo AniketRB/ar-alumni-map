@@ -128,6 +128,11 @@ export default function AR() {
     setDemoMode(true)
   }, [setDemoMode, setError])
 
+  const handleZoneClick = useCallback((cityAlumni) => {
+    if (!cityAlumni?.length) return
+    setRosterCity({ city: cityAlumni[0].city, country: cityAlumni[0].country, alumni: cityAlumni })
+  }, [])
+
   const handleCityClick = useCallback((cityData) => {
     setRosterCity(cityData)
   }, [])
@@ -143,7 +148,7 @@ export default function AR() {
       {/* ── Scanning phase (hidden once map revealed) ──────── */}
       {!mapRevealed && (
         <>
-          <ARScene key={scanKey} alumni={alumni} onZoneClick={() => {}} />
+          <ARScene key={scanKey} alumni={alumni} onZoneClick={handleZoneClick} />
           <ScanningUI
             isInitializing={isInitializing}
             isMapFound={isMapFound}

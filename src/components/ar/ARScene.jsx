@@ -14,9 +14,34 @@ const BRAND = {
   'Agnikul Cosmos':{ color: 0xf97316 },
   default:         { color: 0x8b5cf6 },
 }
-function getBrand(company = '') { return BRAND[company] ?? BRAND.default }
+function getBrand(c = '') { return BRAND[c] ?? BRAND.default }
 
-/* ── Group alumni by city ────────────────────────────────── */
+/* ── Get REAL viewport size (not CSS 100vh which includes browser chrome) ── */
+function getViewport() {
+  // window.visualViewport is the gold standard on mobile
+  // falls back to window.innerWidth/innerHeight (also correct on most browsers)
+  if (window.visualViewport) {
+    return {
+      w: window.visualViewport.width,
+      h: window.visualViewport.height,
+    }
+  }
+  return { w: window.innerWidth, h: window.innerHeight }
+}
+
+/* ── Apply correct size to the container div ─────────────── */
+function sizeContainer(el) {
+  if (!el) return
+  const { w, h } = getViewport()
+  el.style.width  = w + 'px'
+  el.style.height = h + 'px'
+  el.style.position = 'fixed'
+  el.style.top  = '0'
+  el.style.left = '0'
+  el.style.overflow = 'hidden'
+}
+
+/* ── Build positions with cluster offset ─────────────────── */
 function buildPositions(alumni) {
   const cityMap = {}
   alumni.forEach((a) => {
@@ -33,13 +58,12 @@ function buildPositions(alumni) {
   })
 }
 
-/* ── Create one 3-D pin ──────────────────────────────────── */
+/* ── 3-D pin marker ──────────────────────────────────────── */
 function createPin(color, scale = 1.0) {
   const g = new THREE.Group()
   const s = scale
-
-  const needleH   = 0.022 * s
-  const needle    = new THREE.Mesh(
+  const needleH = 0.022 * s
+  const needle  = new THREE.Mesh(
     new THREE.ConeGeometry(0.004 * s, needleH, 8),
     new THREE.MeshStandardMaterial({ color, roughness: 0.3, metalness: 0.7 })
   )
@@ -47,8 +71,8 @@ function createPin(color, scale = 1.0) {
   needle.position.y = needleH * 0.5
   g.add(needle)
 
-  const ballR  = 0.013 * s
-  const ball   = new THREE.Mesh(
+  const ballR = 0.013 * s
+  const ball  = new THREE.Mesh(
     new THREE.SphereGeometry(ballR, 16, 16),
     new THREE.MeshStandardMaterial({ color, roughness: 0.15, metalness: 0.8, emissive: color, emissiveIntensity: 0.35 })
   )
@@ -71,20 +95,18 @@ function createPin(color, scale = 1.0) {
   foot.position.y = 0.0005
   g.add(foot)
 
-  g.userData.ring  = ring
-  g.userData.ball  = ball
-  g.userData.baseY = needleH + ballR
-  g.userData.color = color
+  g.userData = { ring, ball, baseY: needleH + ballR, color }
   return g
 }
 
-/* ── Smooth lerp for zoom animation ─────────────────────── */
 function lerp(a, b, t) { return a + (b - a) * t }
 
 /* ── Camera permission ───────────────────────────────────── */
 async function requestCamera() {
   try {
-    const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+    const s = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } }, audio: false,
+    })
     s.getTracks().forEach(t => t.stop())
     return true
   } catch (e) { console.warn('[AR] camera:', e.name); return false }
@@ -107,19 +129,15 @@ function buildDemoScene(scene, alumni) {
 
 /* ── Main Component ──────────────────────────────────────── */
 export default function ARScene({ alumni, onMarkerClick }) {
-  const containerRef  = useRef(null)
-  const engineRef     = useRef(null)
-  const cameraRef     = useRef(null)
-  const rendererRef   = useRef(null)
-  const anchorRef     = useRef(null)   // MindAR anchor — we manipulate its group for zoom
-  const markersRef    = useRef([])
-  const pinsRef       = useRef([])
-  const raycaster     = useRef(new THREE.Raycaster())
-  const pointer       = useRef(new THREE.Vector2())
-
-  // zoom animation state
-  const zoomTarget    = useRef({ scaleX: 1, scaleY: 1, posX: 0, posY: 0 })
-  const zoomCurrent   = useRef({ scaleX: 1, scaleY: 1, posX: 0, posY: 0 })
+  const containerRef = useRef(null)
+  const engineRef    = useRef(null)
+  const cameraRef    = useRef(null)
+  const markersRef   = useRef([])
+  const pinsRef      = useRef([])
+  const raycaster    = useRef(new THREE.Raycaster())
+  const pointer      = useRef(new THREE.Vector2())
+  const zoomTarget   = useRef({ sx: 1, sy: 1, px: 0, py: 0 })
+  const zoomCurrent  = useRef({ sx: 1, sy: 1, px: 0, py: 0 })
 
   const {
     setInitializing, setTracking, setMapFound,
@@ -127,22 +145,15 @@ export default function ARScene({ alumni, onMarkerClick }) {
     focusedCity, cityZoomMode,
   } = useARStore()
 
-  /* ── Update zoom target when focusedCity changes ────────── */
+  /* ── Zoom target update ──────────────────────────────────── */
   useEffect(() => {
     if (!cityZoomMode || !focusedCity) {
-      // world view — reset
-      zoomTarget.current = { scaleX: 1, scaleY: 1, posX: 0, posY: 0 }
+      zoomTarget.current = { sx: 1, sy: 1, px: 0, py: 0 }
     } else {
-      // zoom into the focused city
       const coords = getCityCoordinates(focusedCity, '')
       const { x, y } = normalizedToWorld(coords.nx, coords.ny)
-      const ZOOM = 4.5
-      zoomTarget.current = {
-        scaleX: ZOOM,
-        scaleY: ZOOM,
-        posX:   -x * ZOOM,
-        posY:   -y * ZOOM,
-      }
+      const Z = 4.5
+      zoomTarget.current = { sx: Z, sy: Z, px: -x * Z, py: -y * Z }
     }
   }, [focusedCity, cityZoomMode])
 
@@ -168,19 +179,22 @@ export default function ARScene({ alumni, onMarkerClick }) {
   /* ── Demo mode ───────────────────────────────────────────── */
   useEffect(() => {
     if (!demoMode || !containerRef.current) return
+    const el = containerRef.current
+    sizeContainer(el)
+
+    const { w, h } = getViewport()
     const scene    = new THREE.Scene()
-    const camera   = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.01, 100)
+    const camera   = new THREE.PerspectiveCamera(75, w / h, 0.01, 100)
     camera.position.set(0, 0, 2)
     scene.add(camera)
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
-    renderer.setSize(innerWidth, innerHeight)
+    renderer.setSize(w, h)
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
     renderer.setClearColor(0x050508, 1)
-    containerRef.current.appendChild(renderer.domElement)
-    cameraRef.current   = camera
-    rendererRef.current = renderer
-    scene.add(new THREE.AmbientLight(0xffffff, 1.2))
+    el.appendChild(renderer.domElement)
+    cameraRef.current = camera
 
+    scene.add(new THREE.AmbientLight(0xffffff, 1.2))
     const root = buildDemoScene(scene, alumni)
     markersRef.current = []
     pinsRef.current    = []
@@ -192,8 +206,7 @@ export default function ARScene({ alumni, onMarkerClick }) {
     })
     setMapFound(true)
 
-    let t = 0
-    let frame
+    let t = 0, frame
     const animate = () => {
       frame = requestAnimationFrame(animate)
       t += 0.016
@@ -207,21 +220,26 @@ export default function ARScene({ alumni, onMarkerClick }) {
     }
     animate()
 
-    const el = containerRef.current
     el.addEventListener('click', handleTap)
     el.addEventListener('touchstart', handleTap, { passive: true })
+
     const onResize = () => {
-      camera.aspect = innerWidth / innerHeight
+      sizeContainer(el)
+      const { w: nw, h: nh } = getViewport()
+      camera.aspect = nw / nh
       camera.updateProjectionMatrix()
-      renderer.setSize(innerWidth, innerHeight)
+      renderer.setSize(nw, nh)
     }
+    window.visualViewport?.addEventListener('resize', onResize)
     window.addEventListener('resize', onResize)
+
     return () => {
       cancelAnimationFrame(frame)
       renderer.dispose()
       renderer.domElement.remove()
       el.removeEventListener('click', handleTap)
       el.removeEventListener('touchstart', handleTap)
+      window.visualViewport?.removeEventListener('resize', onResize)
       window.removeEventListener('resize', onResize)
     }
   }, [demoMode, alumni, handleTap, setMapFound])
@@ -254,16 +272,24 @@ export default function ARScene({ alumni, onMarkerClick }) {
       }
       if (destroyed) return
 
+      // ── CRITICAL: size container to REAL viewport BEFORE MindAR reads it ──
+      const el = containerRef.current
+      sizeContainer(el)
+
+      // Small yield so browser has applied the sizes before MindAR reads clientWidth/clientHeight
+      await new Promise(r => setTimeout(r, 50))
+      if (destroyed) return
+
       mindarThree = new MindARThree({
-        container: containerRef.current, imageTargetSrc: '/ar-assets/map.mind',
+        container: el,
+        imageTargetSrc: '/ar-assets/map.mind',
         uiLoading: 'no', uiScanning: 'no', uiError: 'no',
         filterMinCF: 0.001, filterBeta: 10,
         warmupTolerance: 5, missTolerance: 5,
       })
       engineRef.current = mindarThree
       const { renderer, scene, camera } = mindarThree
-      rendererRef.current = renderer
-      cameraRef.current   = camera
+      cameraRef.current = camera
       renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
 
       scene.add(new THREE.AmbientLight(0xffffff, 1.2))
@@ -271,7 +297,6 @@ export default function ARScene({ alumni, onMarkerClick }) {
       dir.position.set(0, 1, 1); scene.add(dir)
 
       const anchor = mindarThree.addAnchor(0)
-      anchorRef.current = anchor
       anchor.onTargetFound = () => { setMapFound(true); setTrackingLost(false) }
       anchor.onTargetLost  = () => setTrackingLost(true)
 
@@ -282,8 +307,8 @@ export default function ARScene({ alumni, onMarkerClick }) {
       alumni.forEach((alum, i) => {
         const { nx, ny, clusterSize } = positions[i]
         const { x, y } = normalizedToWorld(nx, ny)
-        const pinScale  = clusterSize > 5 ? 0.65 : clusterSize > 2 ? 0.8 : 1.0
-        const pin = createPin(getBrand(alum.company).color, pinScale)
+        const s = clusterSize > 5 ? 0.65 : clusterSize > 2 ? 0.8 : 1.0
+        const pin = createPin(getBrand(alum.company).color, s)
         pin.position.set(x, y, 0.001)
         pin.userData.alumniId = alum.id
         anchor.group.add(pin)
@@ -291,14 +316,11 @@ export default function ARScene({ alumni, onMarkerClick }) {
         pin.traverse(c => { if (c.isMesh) markersRef.current.push(c) })
       })
 
-      // ── Animation loop: pulse + smooth zoom ──
       let t = 0
-      const LERP_SPEED = 0.06   // lower = smoother/slower zoom
-
       renderer.setAnimationLoop(() => {
         t += 0.016
 
-        // 1. Pulse rings and float balls
+        // Pulse pins
         pinsRef.current.forEach((pin, i) => {
           const { ring, ball, baseY } = pin.userData
           if (ring) {
@@ -308,23 +330,26 @@ export default function ARScene({ alumni, onMarkerClick }) {
           if (ball) ball.position.y = baseY + 0.003 * Math.sin(t * 3 + i * 1.1)
         })
 
-        // 2. Smooth zoom: lerp current toward target
-        const cur = zoomCurrent.current
-        const tgt = zoomTarget.current
-        const spd = LERP_SPEED
-        cur.scaleX = lerp(cur.scaleX, tgt.scaleX, spd)
-        cur.scaleY = lerp(cur.scaleY, tgt.scaleY, spd)
-        cur.posX   = lerp(cur.posX,   tgt.posX,   spd)
-        cur.posY   = lerp(cur.posY,   tgt.posY,   spd)
-
-        // Apply to anchor group
-        anchor.group.scale.set(cur.scaleX, cur.scaleY, 1)
-        anchor.group.position.set(cur.posX, cur.posY, 0)
+        // Smooth zoom
+        const c = zoomCurrent.current, tg = zoomTarget.current, sp = 0.06
+        c.sx = lerp(c.sx, tg.sx, sp); c.sy = lerp(c.sy, tg.sy, sp)
+        c.px = lerp(c.px, tg.px, sp); c.py = lerp(c.py, tg.py, sp)
+        anchor.group.scale.set(c.sx, c.sy, 1)
+        anchor.group.position.set(c.px, c.py, 0)
 
         renderer.render(scene, camera)
       })
 
-      const el = containerRef.current
+      // ── Resize handler: re-size container so MindAR video stays correct ──
+      const onResize = () => {
+        sizeContainer(el)
+        // MindAR doesn't expose a resize API, so we update the renderer
+        const { w, h } = getViewport()
+        renderer.setSize(w, h)
+      }
+      window.visualViewport?.addEventListener('resize', onResize)
+      window.addEventListener('resize', onResize)
+
       el.addEventListener('click',      handleTap)
       el.addEventListener('touchstart', handleTap, { passive: true })
       setTracking(true)
@@ -335,14 +360,10 @@ export default function ARScene({ alumni, onMarkerClick }) {
       } catch (err) {
         if (!destroyed) {
           setInitializing(false)
-          if (err.name === 'NotAllowedError' || err.message?.toLowerCase().includes('permission'))
-            setError('permission denied')
-          else if (err.name === 'NotFoundError')
-            setError('No camera found on this device.')
-          else if (err.name === 'NotReadableError')
-            setError('Camera is in use by another app. Close it and retry.')
-          else
-            setError(err.message || 'Failed to start AR. Try Demo Mode.')
+          if      (err.name === 'NotAllowedError')  setError('permission denied')
+          else if (err.name === 'NotFoundError')    setError('No camera found on this device.')
+          else if (err.name === 'NotReadableError') setError('Camera is in use by another app.')
+          else                                      setError(err.message || 'Failed to start AR.')
         }
       }
     }
@@ -362,7 +383,17 @@ export default function ARScene({ alumni, onMarkerClick }) {
     <div
       ref={containerRef}
       id="mindar-ar-container"
-      style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', zIndex: 0 }}
+      style={{
+        position: 'fixed',
+        top: 0, left: 0,
+        // Use JS-set px values (via sizeContainer) — not 100vh which is wrong on mobile
+        // Default to 100% here; sizeContainer() overrides with exact pixel values
+        width: '100%',
+        height: '100%',
+        zIndex: 0,
+        overflow: 'hidden',
+        background: '#000',
+      }}
     />
   )
 }

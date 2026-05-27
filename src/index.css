@@ -7,16 +7,13 @@
   --bg-card:       rgba(255, 255, 255, 0.03);
   --border:        rgba(255, 255, 255, 0.08);
   --border-bright: rgba(255, 255, 255, 0.15);
-
   --accent:        #6366f1;
   --accent-cyan:   #22d3ee;
   --accent-glow:   rgba(99, 102, 241, 0.4);
   --accent-cyan-glow: rgba(34, 211, 238, 0.3);
-
   --text-primary:  #f1f5f9;
   --text-secondary:#94a3b8;
   --text-muted:    #475569;
-
   --radius-lg:     16px;
   --radius-xl:     24px;
 }
@@ -24,32 +21,86 @@
 /* ── Base ──────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html {
+html, body {
+  /* -webkit-fill-available is the correct height on iOS Safari */
+  height: 100%;
   height: -webkit-fill-available;
-}
-
-body {
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
-  min-height: -webkit-fill-available;
-  min-height: 100vh;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Prevent pull-to-refresh interfering with AR */
-.ar-page { overscroll-behavior: none; touch-action: none; }
+/* ── AR root: filled by JS sizeContainer() via inline px values ─ */
+/* DO NOT use 100vh here — that's the layout viewport (too tall on mobile) */
+/* The JS sizeContainer() function sets exact px w/h from visualViewport   */
+.ar-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  background: #000;
+  /* width/height set by JS — these are just safe fallbacks */
+  width: 100%;
+  height: 100%;
+}
+
+/* ── MindAR container & its injected children ──────────────── */
+/* MindAR injects: container > div > video  (and a canvas at same level) */
+/* The container size is already set correctly by JS.                    */
+/* We just ensure the inner video fills it with cover crop.              */
+#mindar-ar-container {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  overflow: hidden !important;
+  /* width/height come from JS inline styles set by sizeContainer() */
+}
+
+/* Inner wrapper div MindAR creates */
+#mindar-ar-container > div {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+/* The actual <video> element */
+#mindar-ar-container video {
+  position: absolute !important;
+  /* Let MindAR set top/left for aspect-ratio centering, but ensure it covers */
+  min-width: 100% !important;
+  min-height: 100% !important;
+  width: auto !important;
+  height: auto !important;
+  object-fit: cover !important;
+  object-position: center !important;
+}
+
+/* The Three.js <canvas> */
+#mindar-ar-container canvas {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Prevent pull-to-refresh on AR page */
+.ar-root { overscroll-behavior: none; touch-action: none; }
 
 /* ── Scrollbar ─────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-secondary); }
 ::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.4); border-radius: 3px; }
 
-/* ── Glass Utility ─────────────────────────────────────────── */
+/* ── Glass ─────────────────────────────────────────────────── */
 .glass {
   background: var(--bg-card);
   backdrop-filter: blur(20px);
@@ -57,9 +108,8 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }
-
 .glass-bright {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255,255,255,0.06);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--border-bright);
@@ -73,7 +123,6 @@ body {
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
-
 .gradient-text-gold {
   background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 50%, #fde68a 100%);
   -webkit-background-clip: text;
@@ -81,18 +130,10 @@ body {
   background-clip: text;
 }
 
-/* ── Glow Effects ──────────────────────────────────────────── */
-.glow {
-  box-shadow: 0 0 30px var(--accent-glow), 0 0 60px rgba(99,102,241,0.1);
-}
-
-.glow-cyan {
-  box-shadow: 0 0 30px var(--accent-cyan-glow), 0 0 60px rgba(34,211,238,0.1);
-}
-
-.glow-text {
-  text-shadow: 0 0 20px rgba(99,102,241,0.8), 0 0 40px rgba(99,102,241,0.4);
-}
+/* ── Glows ─────────────────────────────────────────────────── */
+.glow      { box-shadow: 0 0 30px var(--accent-glow), 0 0 60px rgba(99,102,241,0.1); }
+.glow-cyan { box-shadow: 0 0 30px var(--accent-cyan-glow), 0 0 60px rgba(34,211,238,0.1); }
+.glow-text { text-shadow: 0 0 20px rgba(99,102,241,0.8), 0 0 40px rgba(99,102,241,0.4); }
 
 /* ── Grid Background ───────────────────────────────────────── */
 .bg-grid {
@@ -102,121 +143,40 @@ body {
   background-size: 50px 50px;
 }
 
-/* ── Noise Texture ─────────────────────────────────────────── */
-.bg-noise::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
-  pointer-events: none;
-  z-index: 0;
-}
+/* ── Animations ────────────────────────────────────────────── */
+@keyframes pulse-ring  { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(2.4); opacity: 0; } }
+@keyframes pulse-dot   { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+@keyframes float       { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+@keyframes scan-line   { 0% { top: 0%; opacity: 1; } 100% { top: 100%; opacity: 0; } }
+@keyframes corner-blink{ 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes rotate-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes shimmer     { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
+@keyframes fade-up     { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-/* ── Pulse Ring Animation ──────────────────────────────────── */
-@keyframes pulse-ring {
-  0%   { transform: scale(0.8); opacity: 1; }
-  100% { transform: scale(2.4); opacity: 0; }
-}
-
-@keyframes pulse-dot {
-  0%, 100% { transform: scale(1); }
-  50%       { transform: scale(1.15); }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50%       { transform: translateY(-12px); }
-}
-
-@keyframes scan-line {
-  0%   { top: 0%; opacity: 1; }
-  100% { top: 100%; opacity: 0; }
-}
-
-@keyframes corner-blink {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
-}
-
-@keyframes rotate-slow {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
-
-@keyframes shimmer {
-  0%   { background-position: -200% center; }
-  100% { background-position:  200% center; }
-}
-
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.animate-float       { animation: float 4s ease-in-out infinite; }
-.animate-pulse-ring  { animation: pulse-ring 2s ease-out infinite; }
-.animate-fade-up     { animation: fade-up 0.6s ease forwards; }
-.animate-shimmer {
+.animate-float      { animation: float 4s ease-in-out infinite; }
+.animate-pulse-ring { animation: pulse-ring 2s ease-out infinite; }
+.animate-fade-up    { animation: fade-up 0.6s ease forwards; }
+.animate-shimmer    {
   background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%);
   background-size: 200% 100%;
   animation: shimmer 2s infinite;
 }
 
-/* ── AR-specific ───────────────────────────────────────────── */
-#mindar-ar-container {
-  position: fixed !important;
-  inset: 0 !important;
-  width: 100vw !important;
-  height: 100vh !important;
-  z-index: 0 !important;
-}
-
-#mindar-ar-container canvas {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-}
-
-/* ── Button Base ───────────────────────────────────────────── */
+/* ── Buttons ───────────────────────────────────────────────── */
 .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 0.95rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: none;
-  outline: none;
-  text-decoration: none;
-  white-space: nowrap;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  border-radius: 12px; font-weight: 600; font-size: 0.95rem; cursor: pointer;
+  transition: all 0.2s ease; border: none; outline: none;
+  text-decoration: none; white-space: nowrap;
 }
-
 .btn-primary {
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
-  color: white;
-  padding: 12px 28px;
-  box-shadow: 0 4px 24px rgba(99,102,241,0.4);
+  background: linear-gradient(135deg, #6366f1, #4f46e5); color: white;
+  padding: 12px 28px; box-shadow: 0 4px 24px rgba(99,102,241,0.4);
 }
-
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(99,102,241,0.6);
-}
-
+.btn-primary:hover  { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(99,102,241,0.6); }
 .btn-primary:active { transform: translateY(0); }
-
 .btn-ghost {
-  background: transparent;
-  color: var(--text-secondary);
-  padding: 10px 20px;
-  border: 1px solid var(--border);
+  background: transparent; color: var(--text-secondary);
+  padding: 10px 20px; border: 1px solid var(--border);
 }
-
-.btn-ghost:hover {
-  background: var(--bg-card);
-  color: var(--text-primary);
-  border-color: var(--border-bright);
-}
+.btn-ghost:hover { background: var(--bg-card); color: var(--text-primary); border-color: var(--border-bright); }

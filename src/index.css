@@ -180,3 +180,28 @@ html, body {
   padding: 10px 20px; border: 1px solid var(--border);
 }
 .btn-ghost:hover { background: var(--bg-card); color: var(--text-primary); border-color: var(--border-bright); }
+
+/* ── Camera right-side cutoff fix ──────────────────────────── */
+/* MindAR's inner wrapper gets negative left when video is wider than container.
+   Force it to clip correctly so nothing bleeds outside the screen. */
+#mindar-ar-container > div:first-child {
+  overflow: hidden !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+}
+
+/* Video: cover the container, centered, no overflow */
+#mindar-ar-container video {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  min-width: 100% !important;
+  min-height: 100% !important;
+  width: auto !important;
+  height: auto !important;
+  max-width: none !important;
+  object-fit: cover !important;
+}

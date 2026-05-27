@@ -148,7 +148,7 @@ function CityBanner({ city, alumniInCity, onClose }) {
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
       style={{
         position: 'absolute',
-        top: 'max(80px, calc(env(safe-area-inset-top) + 70px))',
+        top: 'max(130px, calc(env(safe-area-inset-top) + 120px))',
         left: '50%', transform: 'translateX(-50%)',
         zIndex: 25, pointerEvents: 'auto',
       }}

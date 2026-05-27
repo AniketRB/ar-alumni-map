@@ -130,19 +130,28 @@ export default function Dashboard() {
   const handleEdit  = (a) => { setEdit(a); setModal(true) }
   const handleClose = () => { setModal(false); setEdit(null) }
 
-  const handleDelete = (id) => {
-    if (!window.confirm('Delete this alumni?')) return
+  const handleDelete = async (id) => {
+    if (!window.confirm('Delete this alumni? This cannot be undone.')) return
+    const { error } = await supabase.from('alumni').delete().eq('id', id)
+    if (error) { showToast('Delete failed: ' + error.message, 'error'); return }
     setAlumni((prev) => prev.filter((a) => a.id !== id))
     showToast('Alumni deleted', 'error')
   }
 
-  const handleApprove = (id) => {
+  const handleApprove = async (id) => {
+    const { error } = await supabase.from('alumni').update({ status: 'ACTIVE' }).eq('id', id)
+    if (error) { showToast('Approve failed: ' + error.message, 'error'); return }
     setAlumni((prev) => prev.map((a) => a.id === id ? { ...a, status: 'ACTIVE' } : a))
     showToast('Alumni approved and visible in AR')
   }
 
-  const handleToggleVisibility = (id) => {
-    setAlumni((prev) => prev.map((a) => a.id === id ? { ...a, visibility: !a.visibility } : a))
+  const handleToggleVisibility = async (id) => {
+    const target = alumni.find((a) => a.id === id)
+    if (!target) return
+    const newVal = !target.visibility
+    const { error } = await supabase.from('alumni').update({ visibility: newVal }).eq('id', id)
+    if (error) { showToast('Update failed: ' + error.message, 'error'); return }
+    setAlumni((prev) => prev.map((a) => a.id === id ? { ...a, visibility: newVal } : a))
     showToast('Visibility updated')
   }
 

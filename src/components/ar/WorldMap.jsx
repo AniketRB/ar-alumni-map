@@ -57,10 +57,10 @@ export default function WorldMap({ alumni, onCityClick }) {
   return (
     <motion.div
       key="world-map"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.9, ease: 'easeOut' }}
+      initial={{ clipPath: 'circle(0% at 50% 50%)', opacity: 1 }}
+      animate={{ clipPath: 'circle(150% at 50% 50%)', opacity: 1 }}
+      exit={{ clipPath: 'circle(0% at 50% 50%)', opacity: 0 }}
+      transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
       style={{
         position: 'fixed', inset: 0, zIndex: 10,
         background: 'radial-gradient(ellipse 120% 80% at 50% 35%, #060d1f 0%, #050508 100%)',

@@ -11,8 +11,12 @@ export const useARStore = create((set) => ({
   // Selected alumni
   activeAlumni:   null,
 
-  // Demo mode (no .mind file needed)
+  // Demo mode
   demoMode:       false,
+
+  // City zoom mode
+  focusedCity:    null,   // city name string or null (world view)
+  cityZoomMode:   false,
 
   setInitializing:  (v)  => set({ isInitializing: v }),
   setTracking:      (v)  => set({ isTracking: v }),
@@ -22,8 +26,10 @@ export const useARStore = create((set) => ({
   setActiveAlumni:  (a)  => set({ activeAlumni: a }),
   setDemoMode:      (v)  => set({ demoMode: v }),
   clearActiveAlumni:()   => set({ activeAlumni: null }),
+  setFocusedCity:   (city) => set({ focusedCity: city, cityZoomMode: !!city }),
   reset:            ()   => set({
     isInitializing: false, isTracking: false, isMapFound: false,
     trackingLost: false, error: null, activeAlumni: null,
+    focusedCity: null, cityZoomMode: false,
   }),
 }))

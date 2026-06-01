@@ -1,10 +1,35 @@
-import { useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { ComposableMap, Geographies, Geography, Marker, Graticule } from 'react-simple-maps'
+import { feature } from 'topojson-client'
 import { Users, MapPin, Globe } from 'lucide-react'
 
-// Served locally — no CDN dependency
-const GEO_URL = '/ar-assets/world-110m.json'
+const W = 800
+const H = 500
+
+/* Mercator lon/lat → SVG x/y — matches the nx/ny formula in cityCoordinates.js */
+function toXY(lon, lat) {
+  const x = (lon + 180) / 360 * W
+  const φ = Math.min(Math.max(lat, -85.05), 85.05) * Math.PI / 180
+  const y = (1 - Math.log(Math.tan(Math.PI / 4 + φ / 2)) / Math.PI) / 2 * H
+  return [isFinite(x) ? x : 0, isFinite(y) ? y : 0]
+}
+
+function ringToPath(ring) {
+  return ring.map(([lon, lat], i) => {
+    const [x, y] = toXY(lon, lat)
+    return `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`
+  }).join('') + 'Z'
+}
+
+function featureToPath(feat) {
+  const geom = feat?.geometry
+  if (!geom) return ''
+  if (geom.type === 'Polygon')
+    return geom.coordinates.map(ringToPath).join('')
+  if (geom.type === 'MultiPolygon')
+    return geom.coordinates.map(poly => poly.map(ringToPath).join('')).join('')
+  return ''
+}
 
 const BRAND = {
   Google: '#4285f4', Microsoft: '#00a4ef', Meta: '#0866ff',
@@ -19,12 +44,6 @@ function dominantColor(list) {
   list.forEach(a => { counts[a.company] = (counts[a.company] || 0) + 1 })
   const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? ''
   return BRAND[top] ?? BRAND.default
-}
-
-function nxnyToLonLat(nx, ny) {
-  const lon = nx * 360 - 180
-  const lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * ny))) * 180 / Math.PI
-  return [lon, lat]
 }
 
 function buildCityGroups(alumni) {
@@ -48,6 +67,19 @@ function StatPill({ icon: Icon, value, label, color }) {
 }
 
 export default function WorldMap({ alumni, onCityClick }) {
+  const [countries, setCountries] = useState([])
+
+  useEffect(() => {
+    fetch('/ar-assets/world-110m.json')
+      .then(r => r.json())
+      .then(topo => {
+        const obj = topo.objects[Object.keys(topo.objects)[0]]
+        const { features } = feature(topo, obj)
+        setCountries(features)
+      })
+      .catch(err => console.warn('[WorldMap] geo load failed:', err))
+  }, [])
+
   const cityGroups = useMemo(() => buildCityGroups(alumni), [alumni])
   const stats = useMemo(() => ({
     total:     alumni.length,
@@ -56,25 +88,23 @@ export default function WorldMap({ alumni, onCityClick }) {
   }), [alumni, cityGroups])
 
   return (
-    /* Outer wrapper: portal clip-path reveal */
     <motion.div
-      key="world-map"
       initial={{ clipPath: 'circle(0% at 50% 50%)' }}
       animate={{ clipPath: 'circle(150% at 50% 50%)' }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
       style={{
         position: 'fixed', inset: 0, zIndex: 10,
-        background: 'radial-gradient(ellipse 120% 80% at 50% 35%, #060d1f 0%, #050508 100%)',
+        background: '#060d1f',
       }}
     >
       {/* subtle grid */}
       <div
         className="bg-grid"
-        style={{ position: 'absolute', inset: 0, opacity: 0.35, pointerEvents: 'none' }}
+        style={{ position: 'absolute', inset: 0, opacity: 0.35, pointerEvents: 'none', zIndex: 1 }}
       />
 
-      {/* stats bar — fades in after the portal opens */}
+      {/* stats bar */}
       <motion.div
         initial={{ opacity: 0, y: -14 }}
         animate={{ opacity: 1, y: 0 }}
@@ -82,9 +112,9 @@ export default function WorldMap({ alumni, onCityClick }) {
         style={{
           position: 'absolute',
           top: 'max(68px, calc(env(safe-area-inset-top) + 60px))',
-          left: 0, right: 0,
+          left: 0, right: 0, zIndex: 5,
           display: 'flex', justifyContent: 'center',
-          zIndex: 5, pointerEvents: 'none',
+          pointerEvents: 'none',
         }}
       >
         <div style={{
@@ -102,82 +132,76 @@ export default function WorldMap({ alumni, onCityClick }) {
         </div>
       </motion.div>
 
-      {/* world map */}
-      <ComposableMap
-        projection="geoMercator"
-        projectionConfig={{ scale: 130, center: [15, 25] }}
-        width={800}
-        height={500}
-        style={{ width: '100%', height: '100%' }}
+      {/* SVG world map — pure topojson + custom Mercator, no library */}
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 2 }}
+        xmlns="http://www.w3.org/2000/svg"
       >
-        <Graticule stroke="rgba(99,102,241,0.05)" strokeWidth={0.5} />
+        {/* ocean */}
+        <rect width={W} height={H} fill="#060d1f" />
 
-        <Geographies geography={GEO_URL}>
-          {({ geographies }) =>
-            geographies.map(geo => (
-              <Geography
-                key={geo.rsmKey}
-                geography={geo}
-                fill="#0b1628"
-                stroke="#1a2744"
-                strokeWidth={0.4}
-                style={{
-                  default: { outline: 'none' },
-                  hover:   { fill: '#0e1f38', outline: 'none' },
-                  pressed: { outline: 'none' },
-                }}
-              />
-            ))
-          }
-        </Geographies>
+        {/* country fills */}
+        {countries.map((feat, i) => {
+          const d = featureToPath(feat)
+          if (!d) return null
+          return (
+            <path
+              key={i}
+              d={d}
+              fill="#0b1628"
+              stroke="#1e3a5f"
+              strokeWidth={0.4}
+              fillRule="evenodd"
+            />
+          )
+        })}
 
+        {/* city markers — nx/ny maps directly to (nx*W, ny*H) */}
         {cityGroups.map((cg, i) => {
           if (!cg.nx || !cg.ny) return null
           if (Math.abs(cg.nx - 0.5) < 0.0001 && Math.abs(cg.ny - 0.5) < 0.0001) return null
 
-          const [lon, lat] = nxnyToLonLat(cg.nx, cg.ny)
+          const x = cg.nx * W
+          const y = cg.ny * H
           const color = dominantColor(cg.list)
           const r = 5 + Math.min(Math.log2(cg.list.length + 1) * 2.5, 9)
           const count = cg.list.length
 
           return (
-            <Marker key={cg.key} coordinates={[lon, lat]}>
-              {/* Use opacity-only animation on SVG g — scale on SVG needs explicit
-                  transformOrigin and behaves differently across browsers */}
-              <motion.g
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.9 + i * 0.06, duration: 0.4 }}
-                onClick={() => onCityClick({ city: cg.city, country: cg.country, alumni: cg.list })}
-                style={{ cursor: 'pointer' }}
+            <motion.g
+              key={cg.key}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.9 + i * 0.06, duration: 0.4 }}
+              onClick={() => onCityClick({ city: cg.city, country: cg.country, alumni: cg.list })}
+              style={{ cursor: 'pointer' }}
+            >
+              <circle cx={x} cy={y} r={r * 3}   fill={color} fillOpacity={0.05} />
+              <circle cx={x} cy={y} r={r * 1.8} fill={color} fillOpacity={0.13} />
+              <circle cx={x} cy={y} r={r}        fill={color} fillOpacity={0.92}
+                stroke="rgba(255,255,255,0.3)" strokeWidth={0.8} />
+              <text
+                x={x} y={y - r - 5}
+                fontSize={7.5} fill="#94a3b8" textAnchor="middle"
+                style={{ pointerEvents: 'none', userSelect: 'none', fontFamily: 'system-ui, sans-serif' }}
               >
-                <circle r={r * 3.0} fill={color} fillOpacity={0.04} />
-                <circle r={r * 1.8} fill={color} fillOpacity={0.13} />
-                <circle
-                  r={r} fill={color} fillOpacity={0.92}
-                  stroke="rgba(255,255,255,0.3)" strokeWidth={0.8}
-                />
+                {cg.city}
+              </text>
+              {count > 1 && (
                 <text
-                  y={-r - 5} fontSize={7.5} fill="#94a3b8"
-                  textAnchor="middle"
+                  x={x} y={y + r * 0.38}
+                  fontSize={r * 0.78} fill="#fff" textAnchor="middle" fontWeight="800"
                   style={{ pointerEvents: 'none', userSelect: 'none', fontFamily: 'system-ui, sans-serif' }}
                 >
-                  {cg.city}
+                  {count}
                 </text>
-                {count > 1 && (
-                  <text
-                    y={r * 0.38} fontSize={r * 0.78} fill="#fff"
-                    textAnchor="middle" fontWeight="800"
-                    style={{ pointerEvents: 'none', userSelect: 'none', fontFamily: 'system-ui, sans-serif' }}
-                  >
-                    {count}
-                  </text>
-                )}
-              </motion.g>
-            </Marker>
+              )}
+            </motion.g>
           )
         })}
-      </ComposableMap>
+      </svg>
 
       {/* bottom hint */}
       <motion.div
@@ -185,10 +209,10 @@ export default function WorldMap({ alumni, onCityClick }) {
         animate={{ opacity: 1 }}
         transition={{ delay: 1.6 }}
         style={{
-          position: 'absolute',
+          position: 'absolute', zIndex: 5,
           bottom: 'max(28px, calc(env(safe-area-inset-bottom) + 20px))',
           left: '50%', transform: 'translateX(-50%)',
-          zIndex: 5, pointerEvents: 'none', whiteSpace: 'nowrap',
+          pointerEvents: 'none', whiteSpace: 'nowrap',
         }}
       >
         <div style={{
